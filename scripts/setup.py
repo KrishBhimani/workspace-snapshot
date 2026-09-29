@@ -9,7 +9,7 @@ import os
 import sys
 import subprocess
 from pathlib import Path
-from config import get_config, SKILL_DIR
+from config import get_config, gh, SKILL_DIR
 
 BACKUP_REPO = Path.home() / "openclaw-transport"
 
@@ -39,6 +39,25 @@ def install_gpg():
     print("✓ GPG installed")
 
 
+def ensure_remote_repo(config: dict):
+    """Create the transport repo on GitHub as private if it doesn't exist.
+    No-op when gh isn't installed/authenticated — the push below then fails
+    with the usual 'make sure the repo exists' message."""
+    full_name = f"{config['GITHUB_USERNAME']}/{config['REPO_NAME']}"
+    token = config["GITHUB_PAT"]
+
+    if gh(["repo", "view", full_name, "--json", "name"], token=token):
+        return  # exists (just empty)
+
+    print(f"  Repo {full_name} not found — creating it (private) via gh...")
+    if gh(["repo", "create", full_name, "--private"], token=token) or \
+            gh(["repo", "view", full_name, "--json", "name"], token=token):
+        print(f"✓ Created private repo {full_name}")
+    else:
+        print("  Could not create the repo via gh (not installed, not logged in,")
+        print("  or token lacks permission). Create it manually on GitHub as private.")
+
+
 def setup_repo(config: dict):
     repo_url = config["REPO_URL"]
 
@@ -56,7 +75,11 @@ def setup_repo(config: dict):
         print("✓ Repo cloned (existing backups preserved)")
         return
 
-    # Clone failed — repo is probably empty/new, so init fresh
+    # Clone failed — the repo may not exist yet. If gh is available, create it
+    # as a private repo (never public: manifests are plain text).
+    ensure_remote_repo(config)
+
+    # Repo is empty/new, so init fresh
     print("  Repo appears empty, initializing...")
     BACKUP_REPO.mkdir(parents=True, exist_ok=True)
     os.chdir(BACKUP_REPO)

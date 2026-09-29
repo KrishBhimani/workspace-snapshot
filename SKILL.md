@@ -48,9 +48,10 @@ Before running any command, verify:
 
 1. **GPG is installed.** If not (Debian/Ubuntu): `sudo apt-get update && sudo apt-get install -y gnupg gpg-agent`
 2. **A private GitHub repo exists** named `$REPO_NAME` (default `openclaw-transport`).
-   The scripts cannot create it — the user must create it on GitHub first (empty is
-   fine). It must be **private**: chunks are encrypted, but `manifest.json` (backup
-   names, folder list, sizes) is plain text.
+   If the GitHub CLI (`gh`) is installed and logged in, `setup.py` creates it
+   automatically as private. Otherwise the user must create it on GitHub first
+   (empty is fine). It must be **private**: chunks are encrypted, but
+   `manifest.json` (backup names, folder list, sizes) is plain text.
 3. **The `.env` file exists** in this skill's directory with valid values. If not, copy from `.env.example` and fill in: `cp .env.example .env`
 4. **Setup has been run at least once** on this workspace: `python3 scripts/setup.py`
 
@@ -61,6 +62,14 @@ GITHUB_PAT=<GitHub personal access token with repo scope>
 GITHUB_USERNAME=<GitHub username>
 ```
 Optional: `REPO_NAME=<repo name>` — defaults to `openclaw-transport` if unset or blank.
+
+**Using the GitHub CLI instead of a PAT:** if `gh` is installed and logged in
+*on the machine running the scripts* (`gh auth status` to check), `GITHUB_PAT`
+and `GITHUB_USERNAME` can be left blank. The scripts use the gh login's token
+and look up the username from it. A PAT set in `.env` always takes priority.
+Each script prints which source it used (`GitHub auth: gh login (user: ...)`) —
+check that it's the account the user expects. The gh login needs the `repo`
+scope (a default `gh auth login` has it).
 
 Optional — back up more than just `.openclaw`. `SNAPSHOT_FOLDERS` is a
 comma-separated list of folders relative to home (e.g. `/home/coder`). Entries
@@ -112,7 +121,8 @@ the user before restoring, and offer to take a backup of the current state first
 ```bash
 python3 <skill-path>/scripts/setup.py
 ```
-Safe to run multiple times. Installs GPG if missing, clones or syncs the transport repo.
+Safe to run multiple times. Installs GPG if missing, clones or syncs the transport repo,
+and (if `gh` is available) creates the GitHub repo as private when it doesn't exist.
 
 ---
 
@@ -138,7 +148,7 @@ Safe to run multiple times. Installs GPG if missing, clones or syncs the transpo
 3. Present the version list to the user
 
 ### "Set up backups on this new workspace"
-1. Confirm the user has a `.env` file with credentials (help them create one from `.env.example` if not)
+1. Confirm the user has a `.env` file with `BACKUP_PASSWORD` set (help them create one from `.env.example` if not). For GitHub access, either fill in `GITHUB_PAT`/`GITHUB_USERNAME` or check `gh auth status` shows a logged-in account
 2. Run `python3 <skill-path>/scripts/setup.py`
 
 ### "Restore a specific version"

@@ -3,6 +3,9 @@ Shared config loader for OpenClaw snapshot scripts.
 Reads .env file from the skill's root directory (one level up from scripts/).
 """
 
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -56,9 +59,37 @@ def load_env() -> dict:
     return config
 
 
+def gh(args: list[str], token: str = "") -> str:
+    """Run a GitHub CLI command and return its stripped stdout, or "" if gh is
+    missing, not logged in, or the command fails. If token is given, gh uses it
+    (via GH_TOKEN) instead of its own login."""
+    if shutil.which("gh") is None:
+        return ""
+    env = dict(os.environ, GH_TOKEN=token) if token else None
+    result = subprocess.run(["gh", *args], capture_output=True, text=True, env=env)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def resolve_github_auth(config: dict):
+    """Fill GITHUB_PAT / GITHUB_USERNAME from the GitHub CLI when blank in .env.
+
+    Resolution order for each: .env value first, then the gh login.
+    The username is looked up with whichever token is actually in use, so the
+    two can never point at different accounts."""
+    if config.get("GITHUB_PAT"):
+        config["AUTH_SOURCE"] = ".env GITHUB_PAT"
+    else:
+        config["GITHUB_PAT"] = gh(["auth", "token"])
+        config["AUTH_SOURCE"] = "gh login"
+
+    if not config.get("GITHUB_USERNAME") and config.get("GITHUB_PAT"):
+        config["GITHUB_USERNAME"] = gh(["api", "user", "--jq", ".login"], token=config["GITHUB_PAT"])
+
+
 def get_config() -> dict:
     """Load and validate the config."""
     config = load_env()
+    resolve_github_auth(config)
 
     required = ["BACKUP_PASSWORD", "GITHUB_PAT", "GITHUB_USERNAME"]
     missing = [k for k in required if not config.get(k)]
@@ -67,7 +98,12 @@ def get_config() -> dict:
         print("Error: Missing values in .env file:")
         for k in missing:
             print(f"  - {k}")
+        if "GITHUB_PAT" in missing or "GITHUB_USERNAME" in missing:
+            print("  GITHUB_PAT / GITHUB_USERNAME can be left blank if the GitHub CLI")
+            print("  is installed and logged in on this machine:  gh auth login")
         sys.exit(1)
+
+    print(f"GitHub auth: {config['AUTH_SOURCE']} (user: {config['GITHUB_USERNAME']})")
 
     # Not setdefault: .env.example ships "REPO_NAME=" (present but empty),
     # and setdefault only fills keys that are missing entirely.
