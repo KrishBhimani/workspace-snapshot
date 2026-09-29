@@ -304,6 +304,15 @@ def main():
         else:
             print("No changes to push")
     except Exception as e:
+        # Say what actually failed — git's own stderr is the useful part
+        # (e.g. "Author identity unknown" from commit).
+        if isinstance(e, subprocess.CalledProcessError):
+            err = e.stderr.decode(errors="replace").strip() if isinstance(e.stderr, bytes) else (e.stderr or "").strip()
+            print(f"Error: `{' '.join(e.cmd[:2])}` failed (exit {e.returncode})")
+            if err:
+                print(f"  git: {err}")
+        elif not isinstance(e, RuntimeError):  # RuntimeError = push, already reported
+            print(f"Error: {e}")
         # Remove the version folder so next run doesn't find orphaned files
         print(f"  Cleaning up failed backup: {version_dir.name}")
         shutil.rmtree(version_dir, ignore_errors=True)
