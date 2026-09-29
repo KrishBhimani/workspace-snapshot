@@ -2,12 +2,13 @@
 name: snapshot
 description: >
   Backup and restore the .openclaw agent folder — encrypted snapshots pushed to a
-  private GitHub repo. Use this skill whenever the user mentions backup, restore,
-  snapshot, save state, migrate workspace, move to a new machine, or any request
-  to preserve or recover the .openclaw agent. Also trigger when the user asks
-  about available backup versions, wants to check backup status, or needs to set
+  private GitHub repo. Use this skill whenever the user wants to back up, restore,
+  snapshot, save the state of, or migrate their OpenClaw agent or workspace
+  (including moving it to a new machine). Also trigger when the user asks about
+  available agent backup versions, wants to check backup status, or needs to set
   up the backup system on a new workspace. Even casual phrasing like "save my
-  agent" or "load my stuff on the new box" should trigger this skill.
+  agent" or "load my stuff on the new box" should trigger this skill. Do not use
+  it for unrelated backups (databases, other apps).
 ---
 
 # Snapshot — OpenClaw Backup & Restore
@@ -35,7 +36,9 @@ backups/openclaw-{timestamp}/      (or backups/{custom-name}/)
 └── ...
 ```
 
-Last 10 backups are kept (by timestamp); older ones are auto-deleted.
+Last 10 backups are kept (by timestamp); older ones are auto-deleted from the
+repo's current files. They remain in the transport repo's **git history**, so the
+repo keeps growing over time — expect to prune or recreate it eventually.
 
 ---
 
@@ -43,17 +46,21 @@ Last 10 backups are kept (by timestamp); older ones are auto-deleted.
 
 Before running any command, verify:
 
-1. **GPG is installed.** If not: `sudo apt-get update && sudo apt-get install -y gnupg gpg-agent`
-2. **The `.env` file exists** in this skill's directory with valid values. If not, copy from `.env.example` and fill in: `cp .env.example .env`
-3. **Setup has been run at least once** on this workspace: `python3 scripts/setup.py`
+1. **GPG is installed.** If not (Debian/Ubuntu): `sudo apt-get update && sudo apt-get install -y gnupg gpg-agent`
+2. **A private GitHub repo exists** named `$REPO_NAME` (default `openclaw-transport`).
+   The scripts cannot create it — the user must create it on GitHub first (empty is
+   fine). It must be **private**: chunks are encrypted, but `manifest.json` (backup
+   names, folder list, sizes) is plain text.
+3. **The `.env` file exists** in this skill's directory with valid values. If not, copy from `.env.example` and fill in: `cp .env.example .env`
+4. **Setup has been run at least once** on this workspace: `python3 scripts/setup.py`
 
 The `.env` file must contain:
 ```
 BACKUP_PASSWORD=<strong passphrase>
 GITHUB_PAT=<GitHub personal access token with repo scope>
 GITHUB_USERNAME=<GitHub username>
-REPO_NAME=openclaw-transport
 ```
+Optional: `REPO_NAME=<repo name>` — defaults to `openclaw-transport` if unset or blank.
 
 Optional — back up more than just `.openclaw`. `SNAPSHOT_FOLDERS` is a
 comma-separated list of folders relative to home (e.g. `/home/coder`). Entries
@@ -77,7 +84,9 @@ python3 <skill-path>/scripts/backup.py --name stable-config
 ```
 Non-interactive. Compresses, encrypts, chunks if needed, pushes to GitHub.  
 Backs up the folders listed in `SNAPSHOT_FOLDERS` (default `.openclaw`).  
-Auto-deletes versions older than the most recent 10.
+Auto-deletes versions older than the most recent 10.  
+**Reusing a `--name` that already exists replaces that backup** — check
+`restore.py --list` first and confirm with the user before overwriting a named backup.
 
 ### Restore a backup
 ```bash
@@ -94,6 +103,10 @@ python3 <skill-path>/scripts/restore.py --list
 # Interactive mode (prompts user to pick — use only in human-attended sessions)
 python3 <skill-path>/scripts/restore.py
 ```
+**Restore is destructive.** It extracts directly into the home directory and
+overwrites any existing files at the same paths, with no undo. Always confirm with
+the user before restoring, and offer to take a backup of the current state first.
+`--list` is read-only and safe to run anytime.
 
 ### Run setup (first time or new workspace)
 ```bash
@@ -105,7 +118,7 @@ Safe to run multiple times. Installs GPG if missing, clones or syncs the transpo
 
 ## Typical workflows
 
-**Always run setup.py before backup or restore.** It's idempotent (safe to run every time) and ensures GPG is installed, the transport repo exists, and the local repo is synced with GitHub. This prevents issues like missing repos, stale local state, or remotely deleted backups not being reflected locally.
+**Run setup.py before each backup or restore.** It's idempotent (safe to run every time). Backup depends on it: setup ensures the local transport repo (`~/openclaw-transport/`) exists and is synced with GitHub, which prevents stale local state or remotely deleted backups not being reflected. Restore doesn't use the local transport repo (it makes its own temporary clone), but setup still installs GPG and validates credentials, so run it anyway.
 
 ### "Back up my agent"
 1. Run `python3 <skill-path>/scripts/setup.py`
@@ -114,8 +127,10 @@ Safe to run multiple times. Installs GPG if missing, clones or syncs the transpo
 
 ### "Restore my agent" or "Load the latest backup"
 1. Run `python3 <skill-path>/scripts/setup.py`
-2. Run `python3 <skill-path>/scripts/restore.py --latest`
-3. Tell the user it's done and suggest restarting the gateway
+2. Run `python3 <skill-path>/scripts/restore.py --list` and tell the user which backup is latest
+3. Warn that restoring overwrites existing files under home, and get the user's confirmation (offer a backup of the current state first)
+4. Run `python3 <skill-path>/scripts/restore.py --latest`
+5. Tell the user it's done and suggest restarting the gateway
 
 ### "Show me available backups"
 1. Run `python3 <skill-path>/scripts/setup.py`
@@ -129,14 +144,22 @@ Safe to run multiple times. Installs GPG if missing, clones or syncs the transpo
 ### "Restore a specific version"
 1. Run `python3 <skill-path>/scripts/setup.py`
 2. Run `python3 <skill-path>/scripts/restore.py --list` to show available versions
-3. Ask the user which backup they want (by name or timestamp)
+3. Ask the user which backup they want (by name or timestamp), and confirm they're OK with existing files under home being overwritten
 4. Run `python3 <skill-path>/scripts/restore.py --name <name>`
 
 ---
 
 ## Important notes
 
-- The `.env` file in this skill directory is **excluded from backups** (contains secrets).
+- Some things are **never included in backups**, at any depth inside the snapshot folders:
+  - `.env` and `.env.*` files (including this skill's `.env`, which holds secrets)
+  - `.git` directories (so project git history is **not** backed up)
+  - `node_modules`, `*.sock`, and `backups-repo`
+  - WhatsApp sessions/credentials (see below)
+
+  This matters most when `SNAPSHOT_FOLDERS` includes project folders. After a
+  restore, those projects will have no git history or `.env` files. Tell the user
+  about this when they add non-`.openclaw` folders.
 - The transport repo (`~/openclaw-transport/`) lives outside the backed-up folders and is not backed up.
 - By default `.openclaw` is the only folder backed up; add more via `SNAPSHOT_FOLDERS`.
 - New backups are archived rooted at `$HOME` and restore each folder back to its
