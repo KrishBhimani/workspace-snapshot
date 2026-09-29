@@ -87,16 +87,44 @@ All scripts live in the `scripts/` subdirectory of this skill.
 
 ### Take a backup
 ```bash
-python3 <skill-path>/scripts/backup.py
+# Preferred: a descriptive name and message
+python3 <skill-path>/scripts/backup.py --name pre-migration-2026-09-29 --message "Before moving agent to new server"
 
-# Give the backup folder a custom name in GitHub (instead of openclaw-<timestamp>)
-python3 <skill-path>/scripts/backup.py --name stable-config
+# Defaults: folder openclaw-<timestamp>, commit "snapshot: openclaw-<timestamp>"
+python3 <skill-path>/scripts/backup.py
 ```
+- `--name` sets the backup folder name in GitHub (instead of `openclaw-<timestamp>`).
+- `--message` / `-m` is a one-line description. It becomes the git commit message
+  (`snapshot: <name> - <message>`), is stored in `manifest.json`, and is shown by
+  `restore.py --list`.
+
 Non-interactive. Compresses, encrypts, chunks if needed, pushes to GitHub.  
 Backs up the folders listed in `SNAPSHOT_FOLDERS` (default `.openclaw`).  
 Auto-deletes versions older than the most recent 10.  
 **Reusing a `--name` that already exists replaces that backup** — check
 `restore.py --list` first and confirm with the user before overwriting a named backup.
+
+#### Choosing a name and message
+Always pass both `--name` and `--message`, so the backup list is readable
+later. Base them on what the user said and why they're backing up.
+
+**Name** (`--name`):
+- Only letters, digits, `.`, `-` and `_`, with no spaces or slashes (the script rejects anything else).
+- Short, lowercase kebab-case describing the *state or reason*, ending with the date
+  (`YYYY-MM-DD`) so names stay unique and sort sensibly:
+  `pre-migration-2026-09-29`, `stable-config-2026-09-29`, `before-plugin-upgrade-2026-09-29`.
+- If the user gives a name, use it as-is (sanitized to the allowed characters).
+- Avoid vague names (`backup`, `test`, `new`) and names that already exist, unless
+  the user explicitly wants to replace that backup.
+- If there's no meaningful context (e.g. a routine or scheduled backup), omit
+  `--name` and use the default `openclaw-<timestamp>`, but still pass a message.
+
+**Message** (`--message`):
+- One line, around 70 characters or fewer, saying *why* or *what state* this captures:
+  `"Before moving agent to new server"`, `"Working config after WhatsApp setup"`,
+  `"Routine backup"`.
+- Never put secrets, tokens, passwords or personal data in the name or message.
+  Both are stored **unencrypted** (commit history and `manifest.json`).
 
 ### Restore a backup
 ```bash
@@ -133,8 +161,9 @@ and (if `gh` is available) creates the GitHub repo as private when it doesn't ex
 
 ### "Back up my agent"
 1. Run `python3 <skill-path>/scripts/setup.py`
-2. Run `python3 <skill-path>/scripts/backup.py`
-3. Report the timestamp and size to the user
+2. Pick a name and message (see "Choosing a name and message"). Run `restore.py --list` if you need to check that the name isn't taken
+3. Run `python3 <skill-path>/scripts/backup.py --name <name> --message "<message>"`
+4. Report the backup name, message and size to the user
 
 ### "Restore my agent" or "Load the latest backup"
 1. Run `python3 <skill-path>/scripts/setup.py`

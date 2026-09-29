@@ -154,6 +154,15 @@ python3 /path/to/openclaw-snapshot/scripts/backup.py --name stable-config
 The name may use letters, digits, `.`, `-` and `_` (no spaces or slashes). If you
 reuse a name, the new backup cleanly replaces the old folder of that name.
 
+To describe what the backup is for, add `--message` (or `-m`). It becomes the git
+commit message and is shown next to the backup in `restore.py --list`:
+
+```bash
+python3 /path/to/openclaw-snapshot/scripts/backup.py --name stable-config --message "Working config after WhatsApp setup"
+```
+
+The name and message are stored unencrypted, so don't put secrets in them.
+
 **What happens:**
 
 1. It syncs the latest from GitHub (so existing backups from other workspaces are preserved)
@@ -409,6 +418,7 @@ xo-workspace-backup/
 | First-time setup / sync backups          | `python3 /path/to/scripts/setup.py`                                      |
 | Take a backup                            | `python3 /path/to/scripts/backup.py`                                     |
 | Take a backup with a custom name         | `python3 /path/to/scripts/backup.py --name stable-config`               |
+| Take a backup with name and message      | `python3 /path/to/scripts/backup.py --name stable-config -m "Why"`      |
 | Restore a version (interactive)          | `python3 /path/to/scripts/restore.py`                                    |
 | Restore latest (non-interactive)         | `python3 /path/to/scripts/restore.py --latest`                           |
 | Restore a specific backup                | `python3 /path/to/scripts/restore.py --name stable-config`              |

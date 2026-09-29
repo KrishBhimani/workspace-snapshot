@@ -116,6 +116,8 @@ def print_versions(versions: list[dict]):
         label = " ← latest" if i == 1 else ""
         fmt = " [legacy]" if v.get("_format") == "legacy" else ""
         print(f"  [{i}] {v['_name']}  ({size}, {parts_info}){fmt}{label}")
+        if v.get("message"):
+            print(f"        message: {v['message']}")
         ts = v.get("timestamp")
         if ts and ts not in v["_name"]:
             print(f"        created: {ts}")

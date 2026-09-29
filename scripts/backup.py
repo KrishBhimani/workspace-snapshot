@@ -141,7 +141,13 @@ def main():
         "--name", type=str, default="",
         help="Custom name for the backup folder in GitHub (default: openclaw-<timestamp>)",
     )
+    parser.add_argument(
+        "--message", "-m", type=str, default="",
+        help="Short description of this backup, used as the git commit message "
+             "and shown by restore.py --list",
+    )
     args = parser.parse_args()
+    message = " ".join(args.message.split())  # collapse newlines/extra spaces to one line
 
     # Preflight checks
     check_gpg()
@@ -248,6 +254,7 @@ def main():
         # Write manifest
         manifest = {
             "name": backup_name,       # the backup folder name in the repo
+            "message": message,        # optional human description (--message)
             "timestamp": timestamp,
             "layout": "home",          # archive is rooted at $HOME; restore extracts there
             "folders": valid_folders,  # which home-relative folders this snapshot contains
@@ -278,8 +285,11 @@ def main():
         diff = subprocess.run(["git", "diff", "--cached", "--quiet"], capture_output=True)
 
         if diff.returncode != 0:
+            subject = f"snapshot: {backup_name}"
+            if message:
+                subject += f" - {message}"
             subprocess.run(
-                ["git", "commit", "-m", f"snapshot: {backup_name}", "--quiet"],
+                ["git", "commit", "-m", subject, "--quiet"],
                 check=True, capture_output=True,
             )
             result = subprocess.run(
