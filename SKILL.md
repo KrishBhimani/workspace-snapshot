@@ -62,7 +62,8 @@ GITHUB_PAT=<GitHub personal access token with repo scope>
 GITHUB_USERNAME=<GitHub username>
 ```
 Optional: `REPO_NAME=<repo name>` — defaults to `xo-workspace-backup` if unset or blank.
-(The local working copy is always `~/openclaw-transport/`, whatever the repo is named.)
+The local working copy is `~/<REPO_NAME>/` (default `~/xo-workspace-backup/`).
+Setup moves an old `~/openclaw-transport/` there automatically if it tracks the same repo.
 
 **Using the GitHub CLI instead of a PAT:** if `gh` is installed and logged in
 *on the machine running the scripts* (`gh auth status` to check), `GITHUB_PAT`
@@ -157,7 +158,7 @@ and (if `gh` is available) creates the GitHub repo as private when it doesn't ex
 
 ## Typical workflows
 
-**Run setup.py before each backup or restore.** It's idempotent (safe to run every time). Backup depends on it: setup ensures the local transport repo (`~/openclaw-transport/`) exists and is synced with GitHub, which prevents stale local state or remotely deleted backups not being reflected. Restore doesn't use the local transport repo (it makes its own temporary clone), but setup still installs GPG and validates credentials, so run it anyway.
+**Run setup.py before each backup or restore.** It's idempotent (safe to run every time). Backup depends on it: setup ensures the local transport repo (`~/<REPO_NAME>/`) exists and is synced with GitHub, which prevents stale local state or remotely deleted backups not being reflected. Restore doesn't use the local transport repo (it makes its own temporary clone in the system temp directory, deleted afterwards), but setup still installs GPG and validates credentials, so run it anyway.
 
 ### "Back up my agent"
 1. Run `python3 <skill-path>/scripts/setup.py`
@@ -200,7 +201,7 @@ and (if `gh` is available) creates the GitHub repo as private when it doesn't ex
   This matters most when `SNAPSHOT_FOLDERS` includes project folders. After a
   restore, those projects will have no git history or `.env` files. Tell the user
   about this when they add non-`.openclaw` folders.
-- The transport repo (`~/openclaw-transport/`) lives outside the backed-up folders and is not backed up.
+- The transport repo (`~/<REPO_NAME>/`) should not be listed in `SNAPSHOT_FOLDERS`. It isn't backed up by default.
 - By default `.openclaw` is the only folder backed up; add more via `SNAPSHOT_FOLDERS`.
 - New backups are archived rooted at `$HOME` and restore each folder back to its
   original place under home. Older `.openclaw`-only backups still restore into `~/.openclaw`.

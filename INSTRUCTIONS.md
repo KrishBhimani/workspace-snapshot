@@ -322,7 +322,7 @@ That's it — your agent is running on the new workspace.
 
 ## Syncing Backups from Other Workspaces
 
-If you backed up from a different workspace and your local `~/openclaw-transport` folder doesn't have the latest backups, just run setup again:
+If you backed up from a different workspace and your local `~/xo-workspace-backup` folder (or `~/<REPO_NAME>` if you set one) doesn't have the latest backups, just run setup again:
 
 ```bash
 python3 /path/to/openclaw-snapshot/scripts/setup.py

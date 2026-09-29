@@ -22,7 +22,6 @@ from pathlib import Path
 from config import get_config, SKILL_DIR
 
 HOME = Path.home()
-BACKUP_REPO = Path.home() / "openclaw-transport"
 CHUNK_SIZE_BYTES = 95 * 1024 * 1024  # 95 MB
 MAX_VERSIONS = 10
 
@@ -56,9 +55,9 @@ def check_gpg():
             sys.exit(1)
 
 
-def check_transport_repo():
+def check_transport_repo(repo_dir: Path):
     """Verify the transport repo exists, or tell the user to run setup."""
-    if not (BACKUP_REPO / ".git").is_dir():
+    if not (repo_dir / ".git").is_dir():
         print("Error: Transport repo not initialized.")
         print(f"Run setup first:  python3 {SKILL_DIR}/scripts/setup.py")
         sys.exit(1)
@@ -151,9 +150,9 @@ def main():
 
     # Preflight checks
     check_gpg()
-    check_transport_repo()
-
     config = get_config()
+    repo_dir = config["LOCAL_REPO"]
+    check_transport_repo(repo_dir)
     password = config["BACKUP_PASSWORD"]
 
     # Resolve the configured folders (relative to home) and keep only those
@@ -189,11 +188,11 @@ def main():
     # Pull latest from GitHub first (preserve backups from other workspaces)
     print("Syncing with GitHub...")
     subprocess.run(
-        ["git", "-C", str(BACKUP_REPO), "pull", "origin", "main", "--quiet"],
+        ["git", "-C", str(repo_dir), "pull", "origin", "main", "--quiet"],
         capture_output=True,
     )
 
-    backups_dir = BACKUP_REPO / "backups"
+    backups_dir = repo_dir / "backups"
     backups_dir.mkdir(parents=True, exist_ok=True)
     version_dir = backups_dir / backup_name
     # If a backup with this name already exists (e.g. you reused a custom name),
@@ -279,7 +278,7 @@ def main():
 
     # Push to GitHub — if anything fails, remove this version folder so it
     # doesn't get picked up as an orphan by the next run's git add -A
-    os.chdir(BACKUP_REPO)
+    os.chdir(repo_dir)
     try:
         subprocess.run(["git", "add", "-A"], check=True, capture_output=True)
         diff = subprocess.run(["git", "diff", "--cached", "--quiet"], capture_output=True)
@@ -319,7 +318,7 @@ def main():
         # Reset git staging so the orphan isn't staged either
         subprocess.run(
             ["git", "reset", "HEAD", "--quiet"],
-            capture_output=True, cwd=str(BACKUP_REPO),
+            capture_output=True, cwd=str(repo_dir),
         )
         sys.exit(1)
 

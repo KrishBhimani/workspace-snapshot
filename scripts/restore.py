@@ -24,7 +24,6 @@ HOME = Path.home()
 # *contents* of .openclaw, so they extract into ~/.openclaw. Newer backups carry
 # "layout": "home" and extract directly into $HOME.
 LEGACY_RESTORE_DIR = Path.home() / ".openclaw"
-TEMP_DIR = Path.home() / "openclaw-transport-temp"
 
 
 def check_gpg():
@@ -249,21 +248,20 @@ def main():
     repo_url = config["REPO_URL"]
     password = config["BACKUP_PASSWORD"]
 
-    # Clone repo to temp dir
-    if TEMP_DIR.exists():
-        shutil.rmtree(TEMP_DIR)
-
-    print("Cloning backup repo...")
-    result = subprocess.run(
-        ["git", "clone", "--quiet", repo_url, str(TEMP_DIR)],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        print("Clone failed:", result.stderr.strip())
-        sys.exit(1)
+    # Clone into a fresh system temp dir (not under $HOME), removed when done
+    clone_dir = Path(tempfile.mkdtemp(prefix=f"{config['REPO_NAME']}-"))
 
     try:
-        versions = load_versions(TEMP_DIR / "backups")
+        print("Cloning backup repo...")
+        result = subprocess.run(
+            ["git", "clone", "--quiet", repo_url, str(clone_dir)],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print("Clone failed:", result.stderr.strip())
+            sys.exit(1)
+
+        versions = load_versions(clone_dir / "backups")
         if not versions:
             print("No backups found in repo")
             sys.exit(1)
@@ -307,7 +305,7 @@ def main():
         print(f"\nRestored {restored} (from {chosen['_name']})")
 
     finally:
-        shutil.rmtree(TEMP_DIR, ignore_errors=True)
+        shutil.rmtree(clone_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

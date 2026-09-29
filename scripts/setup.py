@@ -6,12 +6,10 @@ Safe to run multiple times.
 """
 
 import os
+import shutil
 import sys
 import subprocess
-from pathlib import Path
-from config import get_config, gh, SKILL_DIR
-
-BACKUP_REPO = Path.home() / "openclaw-transport"
+from config import get_config, gh, SKILL_DIR, LEGACY_LOCAL_REPO
 
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -58,18 +56,43 @@ def ensure_remote_repo(config: dict):
         print("  or token lacks permission). Create it manually on GitHub as private.")
 
 
+def migrate_legacy_repo(config: dict):
+    """Move an old ~/openclaw-transport working copy to ~/<REPO_NAME>, but only
+    if it tracks the same GitHub repo. A copy of a different repo is left
+    alone — pointing it at the new repo would push unrelated history there."""
+    local_repo = config["LOCAL_REPO"]
+    if local_repo == LEGACY_LOCAL_REPO or local_repo.exists():
+        return
+    if not (LEGACY_LOCAL_REPO / ".git").is_dir():
+        return
+
+    origin = run(
+        ["git", "-C", str(LEGACY_LOCAL_REPO), "remote", "get-url", "origin"], check=False,
+    ).stdout.strip()
+    expected = f"github.com/{config['GITHUB_USERNAME']}/{config['REPO_NAME']}.git".lower()
+
+    if origin.lower().endswith(expected):
+        shutil.move(str(LEGACY_LOCAL_REPO), str(local_repo))
+        print(f"✓ Moved {LEGACY_LOCAL_REPO} → {local_repo}")
+    else:
+        print(f"  Note: {LEGACY_LOCAL_REPO} belongs to a different repo and is no longer used.")
+        print(f"  Its backups are still on GitHub; delete the local folder when you like.")
+
+
 def setup_repo(config: dict):
     repo_url = config["REPO_URL"]
+    local_repo = config["LOCAL_REPO"]
+    migrate_legacy_repo(config)
 
-    if (BACKUP_REPO / ".git").is_dir():
-        run(["git", "-C", str(BACKUP_REPO), "remote", "set-url", "origin", repo_url])
-        run(["git", "-C", str(BACKUP_REPO), "pull", "origin", "main", "--quiet"], check=False)
-        print(f"✓ Repo already exists at {BACKUP_REPO} — remote URL updated")
+    if (local_repo / ".git").is_dir():
+        run(["git", "-C", str(local_repo), "remote", "set-url", "origin", repo_url])
+        run(["git", "-C", str(local_repo), "pull", "origin", "main", "--quiet"], check=False)
+        print(f"✓ Repo already exists at {local_repo} — remote URL updated")
         return
 
     # Try cloning first (preserves existing backups on GitHub)
     print("  Cloning from GitHub...")
-    result = run(["git", "clone", repo_url, str(BACKUP_REPO)], check=False)
+    result = run(["git", "clone", repo_url, str(local_repo)], check=False)
 
     if result.returncode == 0:
         print("✓ Repo cloned (existing backups preserved)")
@@ -81,8 +104,8 @@ def setup_repo(config: dict):
 
     # Repo is empty/new, so init fresh
     print("  Repo appears empty, initializing...")
-    BACKUP_REPO.mkdir(parents=True, exist_ok=True)
-    os.chdir(BACKUP_REPO)
+    local_repo.mkdir(parents=True, exist_ok=True)
+    os.chdir(local_repo)
 
     run(["git", "init"])
     run(["git", "remote", "add", "origin", repo_url])

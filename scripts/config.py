@@ -16,6 +16,10 @@ ENV_FILE = SKILL_DIR / ".env"
 # What to snapshot when SNAPSHOT_FOLDERS is not set (backwards compatible).
 DEFAULT_SNAPSHOT_FOLDERS = [".openclaw"]
 
+# Older versions always kept the local working copy here, whatever REPO_NAME
+# was. setup.py migrates it to ~/<REPO_NAME> when it points at the same repo.
+LEGACY_LOCAL_REPO = Path.home() / "openclaw-transport"
+
 
 def get_snapshot_folders(config: dict) -> list[str]:
     """
@@ -113,6 +117,8 @@ def get_config() -> dict:
         f"https://{config['GITHUB_PAT']}@github.com/"
         f"{config['GITHUB_USERNAME']}/{config['REPO_NAME']}.git"
     )
+    # Local working copy of the transport repo, named after the repo itself.
+    config["LOCAL_REPO"] = Path.home() / config["REPO_NAME"]
 
     # Parsed list of folders to snapshot (relative to home). Defaults to
     # [".openclaw"] when SNAPSHOT_FOLDERS is unset.
