@@ -52,7 +52,7 @@ This installs the tool that encrypts and decrypts your backups. You need to run 
 ### Step 2 — Create a GitHub repo
 
 1. Go to [github.com/new](https://github.com/new)
-2. Name it `openclaw-transport`
+2. Name it `xo-workspace-backup`
 3. Set it to **Private**
 4. Click **Create repository**
 
@@ -80,7 +80,7 @@ Now open `.env` in any editor and fill in your values:
 BACKUP_PASSWORD=your-strong-password-here
 GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 GITHUB_USERNAME=YourGitHubUsername
-REPO_NAME=openclaw-transport
+REPO_NAME=xo-workspace-backup
 ```
 
 **Optional — back up more than just `.openclaw`.** Add a `SNAPSHOT_FOLDERS` line
@@ -110,7 +110,7 @@ You'll see:
 
 ✓ Config loaded from .env
   GitHub user: YourUsername
-  Repo: openclaw-transport
+  Repo: xo-workspace-backup
 
 [1/2] Checking GPG...
 ✓ GPG already installed
@@ -184,7 +184,7 @@ Backup complete: stable-config
 **What it looks like on GitHub:**
 
 ```
-openclaw-transport/backups/
+xo-workspace-backup/backups/
 └── openclaw-20260227-120000/          ← Backup folder (or your custom --name)
     ├── manifest.json                  ← Metadata (name, timestamp, folders, size, checksum, etc.)
     ├── part-000.gpg                   ← Chunk 1 (95 MB)
@@ -195,7 +195,7 @@ openclaw-transport/backups/
 For smaller backups (under 95 MB), you'll see just one chunk:
 
 ```
-openclaw-transport/backups/
+xo-workspace-backup/backups/
 └── openclaw-20260227-120000/
     ├── manifest.json
     └── part-000.gpg                   ← Single file (not split)
@@ -313,7 +313,7 @@ That's it — your agent is running on the new workspace.
 
 ## Syncing Backups from Other Workspaces
 
-If you backed up from a different workspace and your local `openclaw-transport` folder doesn't have the latest backups, just run setup again:
+If you backed up from a different workspace and your local `~/openclaw-transport` folder doesn't have the latest backups, just run setup again:
 
 ```bash
 python3 /path/to/openclaw-snapshot/scripts/setup.py
@@ -347,10 +347,10 @@ MAX_VERSIONS = 10  # Change to a higher number like 20 or 50
 
 ## Where Are My Backups Stored?
 
-On GitHub, your `openclaw-transport` repo's backup folder structure looks like this:
+On GitHub, your `xo-workspace-backup` repo's backup folder structure looks like this:
 
 ```
-openclaw-transport/
+xo-workspace-backup/
 └── backups/
     ├── openclaw-20260225-103000/
     │   ├── manifest.json

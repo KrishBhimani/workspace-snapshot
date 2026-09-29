@@ -108,7 +108,7 @@ def get_config() -> dict:
     # Not setdefault: .env.example ships "REPO_NAME=" (present but empty),
     # and setdefault only fills keys that are missing entirely.
     if not config.get("REPO_NAME"):
-        config["REPO_NAME"] = "openclaw-transport"
+        config["REPO_NAME"] = "xo-workspace-backup"
     config["REPO_URL"] = (
         f"https://{config['GITHUB_PAT']}@github.com/"
         f"{config['GITHUB_USERNAME']}/{config['REPO_NAME']}.git"

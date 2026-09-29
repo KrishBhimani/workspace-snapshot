@@ -47,7 +47,7 @@ repo keeps growing over time — expect to prune or recreate it eventually.
 Before running any command, verify:
 
 1. **GPG is installed.** If not (Debian/Ubuntu): `sudo apt-get update && sudo apt-get install -y gnupg gpg-agent`
-2. **A private GitHub repo exists** named `$REPO_NAME` (default `openclaw-transport`).
+2. **A private GitHub repo exists** named `$REPO_NAME` (default `xo-workspace-backup`).
    If the GitHub CLI (`gh`) is installed and logged in, `setup.py` creates it
    automatically as private. Otherwise the user must create it on GitHub first
    (empty is fine). It must be **private**: chunks are encrypted, but
@@ -61,7 +61,8 @@ BACKUP_PASSWORD=<strong passphrase>
 GITHUB_PAT=<GitHub personal access token with repo scope>
 GITHUB_USERNAME=<GitHub username>
 ```
-Optional: `REPO_NAME=<repo name>` — defaults to `openclaw-transport` if unset or blank.
+Optional: `REPO_NAME=<repo name>` — defaults to `xo-workspace-backup` if unset or blank.
+(The local working copy is always `~/openclaw-transport/`, whatever the repo is named.)
 
 **Using the GitHub CLI instead of a PAT:** if `gh` is installed and logged in
 *on the machine running the scripts* (`gh auth status` to check), `GITHUB_PAT`
