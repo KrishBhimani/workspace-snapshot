@@ -5,7 +5,7 @@ Snapshot backup: one or more home-relative folders → tar.gz → GPG encrypt
 Keeps the last 10 backup versions, auto-deletes older ones.
 
 Which folders get backed up is controlled by SNAPSHOT_FOLDERS in .env
-(comma-separated, relative to home). Defaults to ".openclaw".
+(comma-separated, relative to home). Defaults to ".claude".
 """
 
 import argparse
@@ -32,8 +32,8 @@ EXCLUDE = [
     ".env.*",         # excludes .env.local, .env.production, etc.
     "node_modules",
     "*.sock",
-    "whatsapp/store/sessions-*",
-    "credentials/whatsapp",
+    ".claude/.credentials.json",  # Claude Code login token — never leaves the machine
+    ".claude/projects",           # session transcripts (may contain pasted secrets)
 ]
 
 # Compute the relative path of the skill's .env from HOME so we can exclude it
@@ -135,10 +135,10 @@ def sanitize_name(name: str) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create an OpenClaw snapshot")
+    parser = argparse.ArgumentParser(description="Create a workspace snapshot")
     parser.add_argument(
         "--name", type=str, default="",
-        help="Custom name for the backup folder in GitHub (default: openclaw-<timestamp>)",
+        help="Custom name for the backup folder in GitHub (default: workspace-<timestamp>)",
     )
     parser.add_argument(
         "--message", "-m", type=str, default="",
@@ -182,8 +182,8 @@ def main():
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
 
     # The backup folder name in the transport repo. Use the custom --name if
-    # given, otherwise the default openclaw-<timestamp>.
-    backup_name = sanitize_name(args.name) if args.name else f"openclaw-{timestamp}"
+    # given, otherwise the default workspace-<timestamp>.
+    backup_name = sanitize_name(args.name) if args.name else f"workspace-{timestamp}"
 
     # Pull latest from GitHub first (preserve backups from other workspaces)
     print("Syncing with GitHub...")

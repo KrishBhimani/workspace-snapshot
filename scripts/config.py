@@ -1,5 +1,5 @@
 """
-Shared config loader for OpenClaw snapshot scripts.
+Shared config loader for Workspace Snapshot scripts.
 Reads .env file from the skill's root directory (one level up from scripts/).
 """
 
@@ -13,12 +13,8 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).parent.parent
 ENV_FILE = SKILL_DIR / ".env"
 
-# What to snapshot when SNAPSHOT_FOLDERS is not set (backwards compatible).
-DEFAULT_SNAPSHOT_FOLDERS = [".openclaw"]
-
-# Older versions always kept the local working copy here, whatever REPO_NAME
-# was. setup.py migrates it to ~/<REPO_NAME> when it points at the same repo.
-LEGACY_LOCAL_REPO = Path.home() / "openclaw-transport"
+# What to snapshot when SNAPSHOT_FOLDERS is not set.
+DEFAULT_SNAPSHOT_FOLDERS = [".claude"]
 
 
 def get_snapshot_folders(config: dict) -> list[str]:
@@ -27,11 +23,11 @@ def get_snapshot_folders(config: dict) -> list[str]:
     relative to the user's home directory.
 
     SNAPSHOT_FOLDERS is a comma-separated list, e.g.:
-        SNAPSHOT_FOLDERS=.openclaw, projects, notes
+        SNAPSHOT_FOLDERS=.claude, projects, notes
 
-    Each entry may be a direct child of home (.openclaw) or a nested path
+    Each entry may be a direct child of home (.claude) or a nested path
     (projects/myapp). Leading/trailing slashes are stripped. If the value is
-    unset or empty, falls back to [".openclaw"] so existing setups keep working.
+    unset or empty, falls back to DEFAULT_SNAPSHOT_FOLDERS ([".claude"]).
     """
     raw = (config.get("SNAPSHOT_FOLDERS") or "").strip()
     if not raw:
@@ -121,7 +117,7 @@ def get_config() -> dict:
     config["LOCAL_REPO"] = Path.home() / config["REPO_NAME"]
 
     # Parsed list of folders to snapshot (relative to home). Defaults to
-    # [".openclaw"] when SNAPSHOT_FOLDERS is unset.
+    # [".claude"] when SNAPSHOT_FOLDERS is unset.
     config["SNAPSHOT_FOLDERS_LIST"] = get_snapshot_folders(config)
 
     return config

@@ -20,10 +20,10 @@ from pathlib import Path
 from config import get_config
 
 HOME = Path.home()
-# Legacy/old backups (no "layout" field in their manifest) were archived as the
-# *contents* of .openclaw, so they extract into ~/.openclaw. Newer backups carry
-# "layout": "home" and extract directly into $HOME.
-LEGACY_RESTORE_DIR = Path.home() / ".openclaw"
+# Backups are archived rooted at $HOME and marked "layout": "home" in their
+# manifest. Anything else is an unsupported older format and is skipped —
+# extracting it into $HOME would put files in the wrong place.
+SUPPORTED_LAYOUT = "home"
 
 
 def check_gpg():
@@ -58,43 +58,31 @@ def load_versions(backups_dir: Path) -> list[dict]:
     """
     Scan backups/ for version folders with manifest.json.
     Folders may have custom names, so any directory containing a manifest.json
-    counts as a backup (not just openclaw-* ones).
-    Also detects legacy single-file backups (pre-chunking format).
+    counts as a backup. Backups in an unsupported layout are skipped.
     Returns list of version dicts sorted newest first.
     """
     versions = []
+    skipped = []
 
     if not backups_dir.is_dir():
         return versions
 
-    # New format: any folder with a manifest.json
     for d in backups_dir.iterdir():
         if d.is_dir():
             manifest_file = d / "manifest.json"
             if manifest_file.is_file():
                 manifest = json.loads(manifest_file.read_text())
+                if manifest.get("layout") != SUPPORTED_LAYOUT:
+                    skipped.append(d.name)
+                    continue
                 manifest["_path"] = d
-                manifest["_format"] = "chunked"
                 # Display name: prefer the manifest's name, else the folder name
                 manifest["_name"] = manifest.get("name") or d.name
                 versions.append(manifest)
 
-    # Legacy format: standalone .tgz.gpg files (backwards compatibility)
-    for f in backups_dir.glob("openclaw-*.tgz.gpg"):
-        if f.is_file():
-            # Extract timestamp from filename: openclaw-YYYYMMDD-HHMMSS.tgz.gpg
-            ts = f.name.replace("openclaw-", "").replace(".tgz.gpg", "")
-            versions.append({
-                "timestamp": ts,
-                "chunked": False,
-                "chunk_count": 1,
-                "total_size_bytes": f.stat().st_size,
-                "sha256": None,  # legacy backups don't have checksums
-                "parts": [f.name],
-                "_path": f,
-                "_format": "legacy",
-                "_name": f.name.replace(".tgz.gpg", ""),
-            })
+    if skipped:
+        print(f"Note: skipped {len(skipped)} backup(s) in an unsupported older format: "
+              f"{', '.join(sorted(skipped))}")
 
     # Sort newest first by timestamp
     versions.sort(key=lambda v: v.get("timestamp", ""), reverse=True)
@@ -113,8 +101,7 @@ def print_versions(versions: list[dict]):
         size = human_size(v["total_size_bytes"])
         parts_info = f"{v['chunk_count']} part(s)" if v["chunked"] else "single file"
         label = " ← latest" if i == 1 else ""
-        fmt = " [legacy]" if v.get("_format") == "legacy" else ""
-        print(f"  [{i}] {v['_name']}  ({size}, {parts_info}){fmt}{label}")
+        print(f"  [{i}] {v['_name']}  ({size}, {parts_info}){label}")
         if v.get("message"):
             print(f"        message: {v['message']}")
         ts = v.get("timestamp")
@@ -130,12 +117,7 @@ def reassemble_chunks(version: dict, dest_file: Path):
     """Concatenate chunk parts into a single encrypted file."""
     v_path = version["_path"]
 
-    if version["_format"] == "legacy":
-        # Legacy: the path IS the file
-        shutil.copy2(v_path, dest_file)
-        return
-
-    # Chunked format: cat parts in order
+    # Concatenate parts in order
     parts = version.get("parts")
     if not parts:
         # Fallback: glob and sort
@@ -158,7 +140,7 @@ def reassemble_chunks(version: dict, dest_file: Path):
 def verify_checksum(file_path: Path, expected: str | None) -> bool:
     """Verify SHA-256 if we have an expected checksum."""
     if not expected:
-        return True  # legacy backups have no checksum
+        return True  # no checksum recorded in the manifest
 
     actual = sha256_file(file_path)
     if actual != expected:
@@ -189,13 +171,8 @@ def restore_version(version: dict, password: str):
         # Decrypt and extract
         print("  Decrypting and extracting...")
 
-        # New backups are rooted at $HOME (layout == "home"); legacy/old ones
-        # hold the contents of .openclaw and restore into ~/.openclaw.
-        if version.get("layout") == "home":
-            extract_dir = HOME
-        else:
-            extract_dir = LEGACY_RESTORE_DIR
-        extract_dir.mkdir(parents=True, exist_ok=True)
+        # Archives are rooted at $HOME, so each folder lands back in its place
+        extract_dir = HOME
 
         gpg = subprocess.Popen(
             [
@@ -224,13 +201,11 @@ def restore_version(version: dict, password: str):
             sys.exit(1)
 
     # Describe what landed where, for the caller's summary message.
-    if version.get("layout") == "home" and version.get("folders"):
-        return f"{', '.join(folder_names(version))} into {HOME}"
-    return f".openclaw into {LEGACY_RESTORE_DIR}"
+    return f"{', '.join(folder_names(version)) or 'backup'} into {HOME}"
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Restore an OpenClaw snapshot")
+    parser = argparse.ArgumentParser(description="Restore a workspace snapshot")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--latest", action="store_true", help="Restore the most recent backup")
     group.add_argument(

@@ -1,44 +1,45 @@
 ---
 name: snapshot
 description: >
-  Backup and restore the .openclaw agent folder — encrypted snapshots pushed to a
-  private GitHub repo. Use this skill whenever the user wants to back up, restore,
-  snapshot, save the state of, or migrate their OpenClaw agent or workspace
-  (including moving it to a new machine). Also trigger when the user asks about
-  available agent backup versions, wants to check backup status, or needs to set
-  up the backup system on a new workspace. Even casual phrasing like "save my
-  agent" or "load my stuff on the new box" should trigger this skill. Do not use
-  it for unrelated backups (databases, other apps).
+  Back up and restore workspace folders (by default ~/.claude): encrypted
+  snapshots pushed to a private GitHub repo. Use this skill whenever the user
+  wants to back up, restore, snapshot, save the state of, or migrate their
+  workspace, Claude setup or configured folders (including moving to a new
+  machine). Also trigger when the user asks about available workspace backups,
+  wants to check backup status, or needs to set up the backup system on a new
+  workspace. Even casual phrasing like "save my workspace" or "load my stuff on
+  the new box" should trigger this skill. Do not use it for unrelated backups
+  (databases, other apps).
 ---
 
-# Snapshot — OpenClaw Backup & Restore
+# Workspace Snapshot: Backup & Restore
 
-Encrypted backup and restore for the `~/.openclaw` agent folder (and any other
-home-relative folders you configure).  
+Encrypted backup and restore for folders under the home directory: `~/.claude` by
+default, or whatever is listed in `SNAPSHOT_FOLDERS`.
 Backups are GPG-encrypted, chunked for GitHub's 100MB file limit, and pushed to a private repo.
 
 ## How it works
 
-- **backup** — tar.gz → GPG encrypt → split into ≤95MB chunks → push to GitHub
-- **restore** — clone repo → pick version → reassemble chunks → verify checksum → decrypt → extract
-- **setup** — install GPG, clone/init the GitHub transport repo
+- **backup**: tar.gz → GPG encrypt → split into ≤95MB chunks → push to GitHub
+- **restore**: clone repo → pick version → reassemble chunks → verify checksum → decrypt → extract
+- **setup**: install GPG, clone/init the GitHub transport repo
 
-By default only `~/.openclaw` is backed up. Set `SNAPSHOT_FOLDERS` in `.env` to back
-up additional folders (see Prerequisites below).
+By default only `~/.claude` is backed up. Set `SNAPSHOT_FOLDERS` in `.env` to back
+up other folders (see Prerequisites below).
 
 Each backup version lives in its own folder with a manifest. The folder is named
-`openclaw-{timestamp}` by default, or a custom name if you pass `--name`:
+`workspace-{timestamp}` by default, or a custom name if you pass `--name`:
 ```
-backups/openclaw-{timestamp}/      (or backups/{custom-name}/)
+backups/workspace-{timestamp}/     (or backups/{custom-name}/)
 ├── manifest.json
 ├── part-000.gpg
 ├── part-001.gpg
 └── ...
 ```
 
-Last 10 backups are kept (by timestamp); older ones are auto-deleted from the
+The last 10 backups are kept (by timestamp) and older ones are deleted from the
 repo's current files. They remain in the transport repo's **git history**, so the
-repo keeps growing over time — expect to prune or recreate it eventually.
+repo keeps growing over time. Expect to prune or recreate it eventually.
 
 ---
 
@@ -50,8 +51,8 @@ Before running any command, verify:
 2. **A private GitHub repo exists** named `$REPO_NAME` (default `xo-workspace-backup`).
    If the GitHub CLI (`gh`) is installed and logged in, `setup.py` creates it
    automatically as private. Otherwise the user must create it on GitHub first
-   (empty is fine). It must be **private**: chunks are encrypted, but
-   `manifest.json` (backup names, folder list, sizes) is plain text.
+   (empty is fine). It must be **private**: the chunks are encrypted, but
+   `manifest.json` (backup names, messages, folder list, sizes) is plain text.
 3. **The `.env` file exists** in this skill's directory with valid values. If not, copy from `.env.example` and fill in: `cp .env.example .env`
 4. **Setup has been run at least once** on this workspace: `python3 scripts/setup.py`
 
@@ -61,24 +62,34 @@ BACKUP_PASSWORD=<strong passphrase>
 GITHUB_PAT=<GitHub personal access token with repo scope>
 GITHUB_USERNAME=<GitHub username>
 ```
-Optional: `REPO_NAME=<repo name>` — defaults to `xo-workspace-backup` if unset or blank.
+Optional: `REPO_NAME=<repo name>`. It defaults to `xo-workspace-backup` if unset or blank.
 The local working copy is `~/<REPO_NAME>/` (default `~/xo-workspace-backup/`).
-Setup moves an old `~/openclaw-transport/` there automatically if it tracks the same repo.
 
 **Using the GitHub CLI instead of a PAT:** if `gh` is installed and logged in
-*on the machine running the scripts* (`gh auth status` to check), `GITHUB_PAT`
+*on the machine running the scripts* (check with `gh auth status`), `GITHUB_PAT`
 and `GITHUB_USERNAME` can be left blank. The scripts use the gh login's token
 and look up the username from it. A PAT set in `.env` always takes priority.
-Each script prints which source it used (`GitHub auth: gh login (user: ...)`) —
-check that it's the account the user expects. The gh login needs the `repo`
-scope (a default `gh auth login` has it).
+Each script prints which source it used (`GitHub auth: gh login (user: ...)`).
+Check that it's the account the user expects. The gh login needs the `repo`
+scope, which a default `gh auth login` has.
 
-Optional — back up more than just `.openclaw`. `SNAPSHOT_FOLDERS` is a
+Optional: choose which folders to back up. `SNAPSHOT_FOLDERS` is a
 comma-separated list of folders relative to home (e.g. `/home/coder`). Entries
-may be direct children of home or nested paths. Defaults to `.openclaw`:
+may be direct children of home or nested paths. It defaults to `.claude`:
 ```
-SNAPSHOT_FOLDERS=.openclaw, projects, notes
+SNAPSHOT_FOLDERS=.claude, projects, notes
 ```
+
+---
+
+## Running from an AI agent (Claude Code)
+
+Claude Code's safety checks may block `backup.py` as possible data exfiltration,
+because it uploads files from the home directory to a remote server. That is
+expected. Don't try to get around it by rewording or splitting the command.
+Instead, tell the user to either:
+- run it themselves by typing `! python3 <skill-path>/scripts/backup.py --name <name> -m "<message>"`, or
+- add an allow rule such as `Bash(python3 <skill-path>/scripts/backup.py:*)` to their Claude Code settings.
 
 ---
 
@@ -89,20 +100,20 @@ All scripts live in the `scripts/` subdirectory of this skill.
 ### Take a backup
 ```bash
 # Preferred: a descriptive name and message
-python3 <skill-path>/scripts/backup.py --name pre-migration-2026-09-29 --message "Before moving agent to new server"
+python3 <skill-path>/scripts/backup.py --name pre-migration-2026-09-29 --message "Before moving workspace to new server"
 
-# Defaults: folder openclaw-<timestamp>, commit "snapshot: openclaw-<timestamp>"
+# Defaults: folder workspace-<timestamp>, commit "snapshot: workspace-<timestamp>"
 python3 <skill-path>/scripts/backup.py
 ```
-- `--name` sets the backup folder name in GitHub (instead of `openclaw-<timestamp>`).
+- `--name` sets the backup folder name in GitHub (instead of `workspace-<timestamp>`).
 - `--message` / `-m` is a one-line description. It becomes the git commit message
   (`snapshot: <name> - <message>`), is stored in `manifest.json`, and is shown by
   `restore.py --list`.
 
 Non-interactive. Compresses, encrypts, chunks if needed, pushes to GitHub.  
-Backs up the folders listed in `SNAPSHOT_FOLDERS` (default `.openclaw`).  
-Auto-deletes versions older than the most recent 10.  
-**Reusing a `--name` that already exists replaces that backup** — check
+Backs up the folders listed in `SNAPSHOT_FOLDERS` (default `.claude`).  
+Deletes versions older than the most recent 10.  
+**Reusing a `--name` that already exists replaces that backup.** Check
 `restore.py --list` first and confirm with the user before overwriting a named backup.
 
 #### Choosing a name and message
@@ -118,11 +129,11 @@ later. Base them on what the user said and why they're backing up.
 - Avoid vague names (`backup`, `test`, `new`) and names that already exist, unless
   the user explicitly wants to replace that backup.
 - If there's no meaningful context (e.g. a routine or scheduled backup), omit
-  `--name` and use the default `openclaw-<timestamp>`, but still pass a message.
+  `--name` and use the default `workspace-<timestamp>`, but still pass a message.
 
 **Message** (`--message`):
-- One line, around 70 characters or fewer, saying *why* or *what state* this captures:
-  `"Before moving agent to new server"`, `"Working config after WhatsApp setup"`,
+- One line, around 70 characters or fewer, saying *why* the backup was taken or *what state* it captures:
+  `"Before moving workspace to new server"`, `"Working config after MCP setup"`,
   `"Routine backup"`.
 - Never put secrets, tokens, passwords or personal data in the name or message.
   Both are stored **unencrypted** (commit history and `manifest.json`).
@@ -134,12 +145,12 @@ python3 <skill-path>/scripts/restore.py --latest
 
 # Restore a specific backup by its name (or timestamp)
 python3 <skill-path>/scripts/restore.py --name stable-config
-python3 <skill-path>/scripts/restore.py --name openclaw-20260227-120000
+python3 <skill-path>/scripts/restore.py --name workspace-20260929-120000
 
 # List available versions without restoring
 python3 <skill-path>/scripts/restore.py --list
 
-# Interactive mode (prompts user to pick — use only in human-attended sessions)
+# Interactive mode (prompts user to pick; use only in human-attended sessions)
 python3 <skill-path>/scripts/restore.py
 ```
 **Restore is destructive.** It extracts directly into the home directory and
@@ -158,20 +169,20 @@ and (if `gh` is available) creates the GitHub repo as private when it doesn't ex
 
 ## Typical workflows
 
-**Run setup.py before each backup or restore.** It's idempotent (safe to run every time). Backup depends on it: setup ensures the local transport repo (`~/<REPO_NAME>/`) exists and is synced with GitHub, which prevents stale local state or remotely deleted backups not being reflected. Restore doesn't use the local transport repo (it makes its own temporary clone in the system temp directory, deleted afterwards), but setup still installs GPG and validates credentials, so run it anyway.
+**Run setup.py before each backup or restore.** It's idempotent (safe to run every time). Backup depends on it: setup ensures the local transport repo (`~/<REPO_NAME>/`) exists and is synced with GitHub, which prevents stale local state and makes sure remotely deleted backups are reflected locally. Restore doesn't use the local transport repo (it makes its own temporary clone in the system temp directory, deleted afterwards), but setup still installs GPG and validates credentials, so run it anyway.
 
-### "Back up my agent"
+### "Back up my workspace"
 1. Run `python3 <skill-path>/scripts/setup.py`
 2. Pick a name and message (see "Choosing a name and message"). Run `restore.py --list` if you need to check that the name isn't taken
-3. Run `python3 <skill-path>/scripts/backup.py --name <name> --message "<message>"`
+3. Run `python3 <skill-path>/scripts/backup.py --name <name> --message "<message>"` (in Claude Code, see "Running from an AI agent")
 4. Report the backup name, message and size to the user
 
-### "Restore my agent" or "Load the latest backup"
+### "Restore my workspace" or "Load the latest backup"
 1. Run `python3 <skill-path>/scripts/setup.py`
 2. Run `python3 <skill-path>/scripts/restore.py --list` and tell the user which backup is latest
 3. Warn that restoring overwrites existing files under home, and get the user's confirmation (offer a backup of the current state first)
 4. Run `python3 <skill-path>/scripts/restore.py --latest`
-5. Tell the user it's done and suggest restarting the gateway
+5. Tell the user it's done. Suggest restarting any apps that use the restored folders (e.g. start a new Claude Code session) so they pick up the restored state
 
 ### "Show me available backups"
 1. Run `python3 <skill-path>/scripts/setup.py`
@@ -179,7 +190,7 @@ and (if `gh` is available) creates the GitHub repo as private when it doesn't ex
 3. Present the version list to the user
 
 ### "Set up backups on this new workspace"
-1. Confirm the user has a `.env` file with `BACKUP_PASSWORD` set (help them create one from `.env.example` if not). For GitHub access, either fill in `GITHUB_PAT`/`GITHUB_USERNAME` or check `gh auth status` shows a logged-in account
+1. Confirm the user has a `.env` file with `BACKUP_PASSWORD` set (help them create one from `.env.example` if not). For GitHub access, either fill in `GITHUB_PAT`/`GITHUB_USERNAME` or check that `gh auth status` shows a logged-in account
 2. Run `python3 <skill-path>/scripts/setup.py`
 
 ### "Restore a specific version"
@@ -196,14 +207,14 @@ and (if `gh` is available) creates the GitHub repo as private when it doesn't ex
   - `.env` and `.env.*` files (including this skill's `.env`, which holds secrets)
   - `.git` directories (so project git history is **not** backed up)
   - `node_modules`, `*.sock`, and `backups-repo`
-  - WhatsApp sessions/credentials (see below)
+  - `.claude/.credentials.json` (the Claude Code login token). After restoring on a new machine, the user must log in to Claude Code again
+  - `.claude/projects` (Claude Code session transcripts, which may contain pasted secrets)
 
   This matters most when `SNAPSHOT_FOLDERS` includes project folders. After a
   restore, those projects will have no git history or `.env` files. Tell the user
-  about this when they add non-`.openclaw` folders.
+  about this when they add project folders.
 - The transport repo (`~/<REPO_NAME>/`) should not be listed in `SNAPSHOT_FOLDERS`. It isn't backed up by default.
-- By default `.openclaw` is the only folder backed up; add more via `SNAPSHOT_FOLDERS`.
-- New backups are archived rooted at `$HOME` and restore each folder back to its
-  original place under home. Older `.openclaw`-only backups still restore into `~/.openclaw`.
-- WhatsApp sessions are excluded (workspace-specific). User must reconnect after restore.
-- After restoring, the user should restart their gateway to ensure all services pick up the restored state.
+- By default `.claude` is the only folder backed up. Add more via `SNAPSHOT_FOLDERS`.
+- Backups are archived rooted at `$HOME`, and each folder restores back to its
+  original place under home. Backups in an older, unsupported format are skipped
+  by `restore.py` (it prints a note naming them).
